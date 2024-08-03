@@ -14,7 +14,7 @@ func main() {
         AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
         AllowedHeaders: []string{"Content-Type", "Authorization"},
         AllowCredentials: true,
-        Debug: true, // Enable Debugging for testing, consider disabling in production
+        // Debug: true, // Enable Debugging for testing, consider disabling in production
     })
 
 	// apply the cors middleware
