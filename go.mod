@@ -1,4 +1,4 @@
-module go-analytics
+module github.com/bartosz-skejcik/go-analytics
 
 go 1.22.5
 
