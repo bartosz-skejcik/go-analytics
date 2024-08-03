@@ -15,8 +15,8 @@ import (
 )
 
 var analyticsService *analytics.Analytics
-
 var app *gin.Engine
+var db *sql.DB
 
 var (
 	host     = os.Getenv("POSTGRES_HOST")
@@ -24,7 +24,7 @@ var (
 	user     = os.Getenv("POSTGRES_USER")
 	password = os.Getenv("POSTGRES_PASSWORD")
 	dbname   = os.Getenv("POSTGRES_DATABASE")
-  )
+)
 
 func init() {
 	app = gin.New()
@@ -36,19 +36,63 @@ func init() {
 }
 
 func Handler(w http.ResponseWriter, r *http.Request) {
-	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
-    "password=%s dbname=%s sslmode=disable",
-    host, port, user, password, dbname)
+	var err error
+	if db == nil {
+		psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
+			"password=%s dbname=%s sslmode=disable",
+			host, port, user, password, dbname)
 
-	db, err := sql.Open("postgres", psqlInfo)
-	if err != nil {
-		panic(err)
+		db, err = sql.Open("postgres", psqlInfo)
+		if err != nil {
+			http.Error(w, "Failed to connect to database", http.StatusInternalServerError)
+			return
+		}
+
+		err = initializeTables(db)
+		if err != nil {
+			http.Error(w, "Failed to initialize tables", http.StatusInternalServerError)
+			return
+		}
+
+		analyticsService = analytics.New(db)
 	}
-
-	analyticsService = analytics.New(db)
 
 	app.ServeHTTP(w, r)
 }
+
+func initializeTables(db *sql.DB) error {
+	query := `
+	-- Create page_views table
+	CREATE TABLE IF NOT EXISTS page_views (
+		id SERIAL PRIMARY KEY,
+		url TEXT NOT NULL,
+		timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+		user_agent TEXT,
+		ip TEXT,
+		referrer TEXT,
+		country TEXT,
+		country_code TEXT,
+		os TEXT,
+		browser TEXT
+	);
+
+	-- Create custom_events table
+	CREATE TABLE IF NOT EXISTS custom_events (
+		id SERIAL PRIMARY KEY,
+		name TEXT NOT NULL,
+		timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+		data JSONB
+	);
+
+	-- Create indexes for better query performance
+	CREATE INDEX IF NOT EXISTS idx_page_views_timestamp ON page_views(timestamp);
+	CREATE INDEX IF NOT EXISTS idx_custom_events_name_timestamp ON custom_events(name, timestamp);
+	`
+
+	_, err := db.Exec(query)
+	return err
+}
+
 
 func handlePageViews(c *gin.Context) {
 	startTime := time.Now().AddDate(0, 0, -1)
