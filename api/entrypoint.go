@@ -2,7 +2,9 @@ package api
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/bartosz-skejcik/go-analytics/analytics"
@@ -14,9 +16,15 @@ import (
 
 var analyticsService *analytics.Analytics
 
+var app *gin.Engine
+
 var (
-	app *gin.Engine
-)
+	host     = os.Getenv("POSTGRES_HOST")
+	port     = 5432
+	user     = os.Getenv("POSTGRES_USER")
+	password = os.Getenv("POSTGRES_PASSWORD")
+	dbname   = os.Getenv("POSTGRES_DATABASE")
+  )
 
 func init() {
 	app = gin.New()
@@ -28,7 +36,11 @@ func init() {
 }
 
 func Handler(w http.ResponseWriter, r *http.Request) {
-	db, err := sql.Open("postgres", "user=postgres password=postgres dbname=go_analytics sslmode=disable")
+	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
+    "password=%s dbname=%s sslmode=disable",
+    host, port, user, password, dbname)
+
+	db, err := sql.Open("postgres", psqlInfo)
 	if err != nil {
 		panic(err)
 	}
