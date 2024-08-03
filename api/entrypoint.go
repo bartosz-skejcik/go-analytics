@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -20,11 +21,16 @@ var db *sql.DB
 
 // CORS middleware
 func corsMiddleware() gin.HandlerFunc {
+	fmt.Println("CORS middleware")
 	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "https://dev.paczesny.pl")
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		// print the url of the request
+		fmt.Printf("Request URL: %s\n", c.Request.URL)
+		fmt.Printf("Request Method: %s\n", c.Request.Method)
+		c.Writer.Header().Set("Access-Control-Allow-Origin", os.Getenv("CORS_ORIGIN"))
+		// c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT")
+		c.Writer.Header().Set("Access-Control-Max-Age", "300")
 	}
 }
 
@@ -34,9 +40,23 @@ var (
 	user     = os.Getenv("POSTGRES_USER")
 	password = os.Getenv("POSTGRES_PASSWORD")
 	dbname   = os.Getenv("POSTGRES_DATABASE")
+	sslmode  = os.Getenv("POSTGRES_SSLMODE")
 )
 
 func init() {
+	// err := godotenv.Load(".env")
+
+    // if err != nil {
+    //     log.Fatal("Error loading .env file")
+    // }
+
+	host = os.Getenv("POSTGRES_HOST")
+	port = 5432
+	user = os.Getenv("POSTGRES_USER")
+	password = os.Getenv("POSTGRES_PASSWORD")
+	dbname = os.Getenv("POSTGRES_DATABASE")
+	sslmode = os.Getenv("POSTGRES_SSLMODE")
+
 	app = gin.New()
 	r := app.Group("/api")
 	r.Use(corsMiddleware())
@@ -44,14 +64,16 @@ func init() {
 	r.POST("/event", handleCustomEvent)
 	r.GET("/pageviews", handlePageViews)
 	r.GET("/custom-events", handleCustomEvents)
+	r.OPTIONS("/pageview", handleOptions)
+	r.OPTIONS("/event", handleOptions)
 }
 
 func Handler(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if db == nil {
 		psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
-			"password=%s dbname=%s sslmode=require",
-			host, port, user, password, dbname)
+			"password=%s dbname=%s sslmode=%s",
+			host, port, user, password, dbname, sslmode)
 
 		db, err = sql.Open("postgres", psqlInfo)
 		if err != nil {
@@ -104,6 +126,15 @@ func initializeTables(db *sql.DB) error {
 	return err
 }
 
+func handleOptions(c *gin.Context) {
+	c.Header("Access-Control-Allow-Origin", os.Getenv("CORS_ORIGIN"))
+	c.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+	c.Header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization")
+	c.Header("Access-Control-Allow-Credentials", "true")
+	c.Header("Access-Control-Max-Age", "300")
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
 
 func handlePageViews(c *gin.Context) {
 	startTime := time.Now().AddDate(0, 0, -1)
@@ -140,7 +171,12 @@ func handleCustomEvents(c *gin.Context) {
 	}
 
 	if name == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
+		customEvent, err := analyticsService.GetAllCustomEvents()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, customEvent)
 		return
 	}
 
@@ -178,17 +214,28 @@ func handlePageView(c *gin.Context) {
 }
 
 func handleCustomEvent(c *gin.Context) {
-	var ce analytics.CustomEvent
+    var event analytics.CustomEvent
 
-	if err := c.ShouldBindJSON(&ce); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+    // Parse the JSON body
+    if err := c.ShouldBindJSON(&event); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
 
-	if err := analyticsService.RecordCustomEvent(ce); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
+    // Serialize the Data field to JSON
+    dataJSON, err := json.Marshal(event.Data)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to serialize event data"})
+        return
+    }
 
-	c.Status(http.StatusOK)
+    // Insert into database
+    _, err = db.Exec("INSERT INTO custom_events (name, timestamp, data) VALUES ($1, $2, $3)",
+        event.Name, event.Timestamp, string(dataJSON))
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"message": "Event recorded successfully"})
 }

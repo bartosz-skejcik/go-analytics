@@ -12,7 +12,7 @@ type Analytics struct {
 
 type PageView struct {
 	URL       string `json:"url"`
-	Timestamp time.Time `json:"timestamp"`
+	Timestamp string `json:"timestamp"`
 	UserAgent string `json:"user_agent"`
 	IP        string `json:"ip"`
 	Referrer  string `json:"referrer"`
@@ -24,7 +24,7 @@ type PageView struct {
 
 type CustomEvent struct {
 	Name      string `json:"name"`
-	Timestamp time.Time `json:"timestamp"`
+	Timestamp string `json:"timestamp"`
 	Data      map[string]interface{} `json:"data"`
 }
 
@@ -83,6 +83,33 @@ func (a *Analytics) GetCustomEvents(name string, startTime, endTime time.Time) (
 		ORDER BY timestamp DESC
 	`
 	rows, err := a.DB.Query(query, name, startTime, endTime)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []CustomEvent
+	for rows.Next() {
+		var ce CustomEvent
+		var dataJSON []byte
+		err := rows.Scan(&ce.Name, &ce.Timestamp, &dataJSON)
+		if err != nil {
+			return nil, err
+		}
+		json.Unmarshal(dataJSON, &ce.Data)
+		events = append(events, ce)
+	}
+
+	return events, nil
+}
+
+func (a *Analytics) GetAllCustomEvents() ([]CustomEvent, error) {
+	query := `
+		SELECT name, timestamp, data
+		FROM custom_events
+		ORDER BY timestamp DESC
+	`
+	rows, err := a.DB.Query(query)
 	if err != nil {
 		return nil, err
 	}
