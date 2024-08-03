@@ -39,7 +39,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if db == nil {
 		psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
-			"password=%s dbname=%s sslmode=disable",
+			"password=%s dbname=%s sslmode=require",
 			host, port, user, password, dbname)
 
 		db, err = sql.Open("postgres", psqlInfo)
