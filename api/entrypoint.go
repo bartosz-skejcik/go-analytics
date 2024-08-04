@@ -41,6 +41,7 @@ func init() {
     r.POST("/event", handleEvent)
     r.GET("/pageviews", handlePageViews)
     r.GET("/events", handleEvents)
+    r.GET("/sessions", handleSessions)
     r.OPTIONS("/session", handleOptions)
     r.OPTIONS("/event", handleOptions)
 }
@@ -90,7 +91,7 @@ func initializeTables(db *sql.DB) error {
 
     CREATE TABLE IF NOT EXISTS page_views (
         id SERIAL PRIMARY KEY,
-        anonymous_id TEXT NOT NULL,
+        session_id INTEGER NOT NULL REFERENCES sessions(id),
         url TEXT NOT NULL,
         view_order INTEGER NOT NULL,
         time_spent INTEGER NOT NULL
@@ -106,7 +107,7 @@ func initializeTables(db *sql.DB) error {
     );
 
     CREATE INDEX IF NOT EXISTS idx_sessions_timestamp ON sessions(timestamp);
-    CREATE INDEX IF NOT EXISTS idx_page_views_anonymous_id ON page_views(anonymous_id);
+    CREATE INDEX IF NOT EXISTS idx_page_views_session_id ON page_views(session_id);
     CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
     `
 
@@ -147,6 +148,17 @@ func handleSession(c *gin.Context) {
     }
 
     c.Status(http.StatusOK)
+}
+
+func handleSessions(c *gin.Context) {
+    distinct := c.Query("distinct") == "true"
+    sessions, err := analyticsService.GetSessions(distinct)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+
+    c.JSON(http.StatusOK, sessions)
 }
 
 func handleEvent(c *gin.Context) {
