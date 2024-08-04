@@ -97,9 +97,6 @@ func initializeTables(db *sql.DB) error {
             time_spent INTEGER NOT NULL
         )`,
 
-        `ALTER TABLE page_views ADD CONSTRAINT fk_session
-         FOREIGN KEY (session_id) REFERENCES sessions(id)`,
-
         `CREATE TABLE IF NOT EXISTS events (
             id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
