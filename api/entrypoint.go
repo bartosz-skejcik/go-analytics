@@ -4,12 +4,14 @@ package api
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/bartosz-skejcik/go-analytics/analytics"
 	"github.com/bartosz-skejcik/go-analytics/utils"
+	"github.com/joho/godotenv"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
@@ -29,10 +31,10 @@ func corsMiddleware() gin.HandlerFunc {
 }
 
 func init() {
-    // err := godotenv.Load(".env")
-    // if err != nil {
-    //     log.Fatal("Error loading .env file")
-    // }
+    err := godotenv.Load(".env")
+    if err != nil {
+        log.Fatal("Error loading .env file")
+    }
 
     app = gin.New()
     r := app.Group("/api")
