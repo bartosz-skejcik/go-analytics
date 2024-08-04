@@ -4,14 +4,12 @@ package api
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/bartosz-skejcik/go-analytics/analytics"
 	"github.com/bartosz-skejcik/go-analytics/utils"
-	"github.com/joho/godotenv"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
@@ -31,10 +29,10 @@ func corsMiddleware() gin.HandlerFunc {
 }
 
 func init() {
-    err := godotenv.Load(".env")
-    if err != nil {
-        log.Fatal("Error loading .env file")
-    }
+    // err := godotenv.Load(".env")
+    // if err != nil {
+    //     log.Fatal("Error loading .env file")
+    // }
 
     app = gin.New()
     r := app.Group("/api")
@@ -65,7 +63,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
         err = initializeTables(db)
         if err != nil {
-            http.Error(w, "Failed to initialize tables", http.StatusInternalServerError)
+            http.Error(w, fmt.Sprintf("Failed to initialize tables: %s", err.Error()), http.StatusInternalServerError)
             return
         }
 
@@ -76,45 +74,54 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func initializeTables(db *sql.DB) error {
-    query := `
-    CREATE TABLE IF NOT EXISTS sessions (
-        id SERIAL PRIMARY KEY,
-        anonymous_id TEXT NOT NULL,
-        timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
-        referrer TEXT,
-        screen_width INTEGER,
-        ip TEXT,
-        user_agent TEXT,
-        country TEXT,
-        country_code TEXT,
-        os TEXT,
-        browser TEXT
-    );
+    queries := []string{
+        `CREATE TABLE IF NOT EXISTS sessions (
+            id SERIAL PRIMARY KEY,
+            anonymous_id TEXT NOT NULL,
+            timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+            referrer TEXT,
+            screen_width INTEGER,
+            ip TEXT,
+            user_agent TEXT,
+            country TEXT,
+            country_code TEXT,
+            os TEXT,
+            browser TEXT
+        )`,
 
-    CREATE TABLE IF NOT EXISTS page_views (
-        id SERIAL PRIMARY KEY,
-        session_id INTEGER NOT NULL REFERENCES sessions(id),
-        url TEXT NOT NULL,
-        view_order INTEGER NOT NULL,
-        time_spent INTEGER NOT NULL
-    );
+        `CREATE TABLE IF NOT EXISTS page_views (
+            id SERIAL PRIMARY KEY,
+            session_id INTEGER,
+            url TEXT NOT NULL,
+            view_order INTEGER NOT NULL,
+            time_spent INTEGER NOT NULL
+        )`,
 
-    CREATE TABLE IF NOT EXISTS events (
-        id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
-        data JSONB,
-        ip TEXT,
-        user_agent TEXT
-    );
+        `ALTER TABLE page_views ADD CONSTRAINT fk_session
+         FOREIGN KEY (session_id) REFERENCES sessions(id)`,
 
-    CREATE INDEX IF NOT EXISTS idx_sessions_timestamp ON sessions(timestamp);
-    CREATE INDEX IF NOT EXISTS idx_page_views_session_id ON page_views(session_id);
-    CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
-    `
+        `CREATE TABLE IF NOT EXISTS events (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+            data JSONB,
+            ip TEXT,
+            user_agent TEXT
+        )`,
 
-    _, err := db.Exec(query)
-    return err
+        `CREATE INDEX IF NOT EXISTS idx_sessions_timestamp ON sessions(timestamp)`,
+        `CREATE INDEX IF NOT EXISTS idx_page_views_session_id ON page_views(session_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp)`,
+    }
+
+    for _, query := range queries {
+        _, err := db.Exec(query)
+        if err != nil {
+            return fmt.Errorf("error executing query '%s': %v", query, err)
+        }
+    }
+
+    return nil
 }
 
 func handleOptions(c *gin.Context) {
