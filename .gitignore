@@ -3,3 +3,6 @@
 api/go-analytics
 
 .env
+.env.*
+
+tmp
