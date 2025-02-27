@@ -4,28 +4,23 @@ import "github.com/bartosz-skejcik/go-analytics/internal/db/models"
 
 func (s *Service) GetAllSessions() ([]models.Session, error) {
 	s.db.Connect()
-	defer s.db.Db.Close()
-
-	query := `
-  select id, anonymous_id, timestamp, referrer, screen_width, ip, user_agent, country, country_code, os, browser from session;
-  `
-	rows, err := s.db.Db.Query(query)
+	pDb, err := s.db.Client.DB()
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-	defer rows.Close()
+
+	defer pDb.Close()
 
 	var sessions []models.Session
-	for rows.Next() {
-		var s models.Session
-		err := rows.Scan(
-			&s.Id, &s.AnonymousID, &s.Timestamp, &s.Referrer, &s.ScreenWidth, &s.IP, &s.UserAgent, &s.Country, &s.CountryCode, &s.OS, &s.Browser,
-		)
-		if err != nil {
-			return nil, err
-		}
-		sessions = append(sessions, s)
-	}
+	s.db.Client.Model(&models.Session{})
+	results := s.db.Client.Find(&sessions)
 
-	return sessions, nil
+	return sessions, results.Error
+}
+
+func (s *Service) SessionCreateDtoToModel(dto *models.SessionCreateDto) (*models.Session, error) {
+	// create the session in the database (get the session id back)
+	// go through each ...
+
+	return nil, nil
 }

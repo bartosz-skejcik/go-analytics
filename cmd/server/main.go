@@ -15,10 +15,7 @@ func main() {
 
 	db := db.New(conf)
 
-	err = db.RunMigrations()
-	if err != nil {
-		panic(err)
-	}
+	db.RunMigrations()
 
 	server := server.New(db)
 

@@ -1,84 +1,57 @@
 package db
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
-	"os"
 
 	"github.com/bartosz-skejcik/go-analytics/internal/config"
-	"github.com/go-pg/pg/v10"
+	"github.com/bartosz-skejcik/go-analytics/internal/db/models"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 type Database struct {
-	Db     *pg.DB
-	config *config.Config
+	Db     *sql.DB
+	Client *gorm.DB
+	Config *config.Config
 }
 
 func New(c *config.Config) *Database {
 	return &Database{
-		Db:     nil,
-		config: c,
+		Config: c,
 	}
 }
 
 func (d *Database) Connect() error {
 	var err error
 
-	d.Db = pg.Connect(&pg.Options{
-		Addr:     fmt.Sprintf("%s:%d", d.config.DB_HOST, d.config.DB_PORT),
-		User:     d.config.DB_USER,
-		Password: d.config.DB_PASSWORD,
-		Database: d.config.DB_NAME,
-	})
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d sslmode=disable", d.Config.DB_HOST, d.Config.DB_USER, d.Config.DB_PASSWORD, d.Config.DB_NAME, d.Config.DB_PORT)
+
+	d.Client, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	CheckError(err)
 
 	return err
 }
 
-func (d *Database) RunMigrations() error {
-	// 1. read the migrations folder for files
-	// 2. read each file and save the contents to a string variable
-	// 3. execute the string variable on the database
-
-	var err error
-
-	err = d.Connect()
+func (d *Database) RunMigrations() {
+	err := d.Connect()
 	if err != nil {
-		return err
+		panic(err)
+	}
+
+	d.Db, err = d.Client.DB()
+	if err != nil {
+		panic(err)
 	}
 
 	defer d.Db.Close()
 
-	migrationsDir := "migrations"
-
-	files, err := os.ReadDir(migrationsDir)
+	err = d.Client.AutoMigrate(&models.Session{}, &models.PageView{}, &models.Event{})
 	if err != nil {
-		return err
+		log.Printf("Error while migrating: %v", err)
+		return
 	}
-
-	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-
-		filePath := fmt.Sprintf("%s/%s", migrationsDir, file.Name())
-
-		content, err := os.ReadFile(filePath)
-		if err != nil {
-			return err
-		}
-
-		log.Printf("Executing %s", file.Name())
-
-		_, err = d.Db.Exec(string(content))
-		if err != nil {
-			return err
-		}
-	}
-
-	log.Println("Finished running all migrations")
-
-	return nil
 }
 
 func CheckError(err error) {

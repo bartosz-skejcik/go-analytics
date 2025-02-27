@@ -31,5 +31,6 @@ func New(mw func() gin.HandlerFunc, s *service.Service) *Router {
 
 func (r *Router) RegisterRoutes() {
 	r.Router.GET("/", r.HandleHome)
-	r.Router.GET("/sessions", r.HandleGetSessions)
+	r.Router.GET("/sessions", r.GetSessions)
+	r.Router.POST("/sessions", r.CreateSession)
 }
